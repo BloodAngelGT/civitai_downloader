@@ -7,33 +7,43 @@ import sys
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-# === .env laden ===
 load_dotenv()
 API_KEY = os.getenv("CIVITAI_API_KEY")
 COMFYUI_MODEL_ROOT = os.getenv("COMFYUI_MODEL_ROOT", "/mnt/user/appdata/comfyui-nvidia/mnt/ComfyUI/models")
-CIVITAI_BASE_API = "https://civitai.com/api/v1/models"
+CIVITAI_BASE_API = "https://civitai.com/api/v1/model-versions"
 
 if not API_KEY:
     print("Fehler: API-Key nicht gefunden. Lege eine .env-Datei mit 'CIVITAI_API_KEY=...' an.")
     sys.exit(1)
 
-def extract_model_id(url):
-    match = re.search(r'/models/(\d+)', url)
-    return match.group(1) if match else None
+def extract_model_version_id(url):
+    match = re.search(r'modelVersionId=(\d+)', url)
+    if match:
+        return match.group(1)
+    print("Fehler: Kein 'modelVersionId' gefunden. Bitte vollständige Modell-URL verwenden.")
+    sys.exit(1)
 
-def get_model_metadata(model_id):
-    url = f"{CIVITAI_BASE_API}/{model_id}"
+def get_model_metadata(model_version_id):
+    url = f"{CIVITAI_BASE_API}/{model_version_id}"
     response = requests.get(url)
     response.raise_for_status()
     return response.json()
 
 def get_download_info(metadata):
-    version = metadata["modelVersions"][0]
-    download_url = version["downloadUrl"]
-    base_model = version.get("baseModel", "unknown").replace(" ", "")
-    model_type = metadata.get("type", "Unknown")
-    filename = version["files"][0]["name"]
-    tags = [t['name'].lower() for t in metadata.get("tags", [])]
+    download_url = metadata["downloadUrl"]
+    base_model = metadata.get("baseModel", "unknown").replace(" ", "")
+    model_type = metadata.get("model", {}).get("type", "Unknown")
+    filename = metadata["files"][0]["name"]
+
+    raw_tags = metadata.get("model", {}).get("tags", [])
+    # Egal ob Liste von Strings oder Liste von Dicts
+    tags = []
+    for tag in raw_tags:
+        if isinstance(tag, str):
+            tags.append(tag.lower())
+        elif isinstance(tag, dict) and "name" in tag:
+            tags.append(tag["name"].lower())
+
     return download_url, base_model, model_type, filename, tags
 
 def comfyui_path_for(model_type):
@@ -76,18 +86,15 @@ def download_file(url, output_path, api_key):
 
 def main():
     if len(sys.argv) != 2:
-        print("Verwendung: civitai_downloader <Civitai-Link>")
+        print("Verwendung: ./civitai_downloader.py \"https://civitai.com/...modelVersionId=XXXX\"")
         sys.exit(1)
 
     civitai_url = sys.argv[1].strip()
-    model_id = extract_model_id(civitai_url)
-    if not model_id:
-        print("Ungültige URL. Beispiel: https://civitai.com/models/123456")
-        sys.exit(1)
+    model_version_id = extract_model_version_id(civitai_url)
 
-    print(f"Modell-ID: {model_id} wird verarbeitet...")
+    print(f"Model-Version-ID: {model_version_id} wird verarbeitet...")
 
-    metadata = get_model_metadata(model_id)
+    metadata = get_model_metadata(model_version_id)
     download_url, base_model, model_type, filename, tags = get_download_info(metadata)
 
     comfy_subdir = comfyui_path_for(model_type)
