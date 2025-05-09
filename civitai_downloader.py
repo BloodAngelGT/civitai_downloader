@@ -30,13 +30,12 @@ def get_model_metadata(model_version_id):
     return response.json()
 
 def get_download_info(metadata):
-    download_url = metadata["downloadUrl"]
+    download_url = f"https://civitai.com/api/download/models/{metadata['id']}?type=Model&format=SafeTensor"
     base_model = metadata.get("baseModel", "unknown").replace(" ", "")
     model_type = metadata.get("model", {}).get("type", "Unknown")
     filename = metadata["files"][0]["name"]
 
     raw_tags = metadata.get("model", {}).get("tags", [])
-    # Egal ob Liste von Strings oder Liste von Dicts
     tags = []
     for tag in raw_tags:
         if isinstance(tag, str):
@@ -47,12 +46,13 @@ def get_download_info(metadata):
     return download_url, base_model, model_type, filename, tags
 
 def comfyui_path_for(model_type):
+    model_type = model_type.lower()
     return {
-        "Checkpoint": "checkpoints",
-        "LoCon": "loras",
-        "LoRA": "loras",
-        "TextualInversion": "embeddings",
-        "Hypernetwork": "hypernetworks"
+        "checkpoint": "checkpoints",
+        "locon": "loras",
+        "lora": "loras",
+        "textualinversion": "embeddings",
+        "hypernetwork": "hypernetworks"
     }.get(model_type, "other")
 
 def infer_subfolder(tags):
