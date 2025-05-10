@@ -21,7 +21,7 @@ def extract_model_version_id(url):
     if match:
         return match.group(1)
     print("Fehler: Kein 'modelVersionId' gefunden. Bitte vollständige Modell-URL verwenden.")
-    sys.exit(1)
+    return None
 
 def get_model_metadata(model_version_id):
     url = f"{CIVITAI_BASE_API}/{model_version_id}"
@@ -84,35 +84,46 @@ def download_file(url, output_path, api_key):
                     file.write(chunk)
                     bar.update(len(chunk))
 
-def main():
-    if len(sys.argv) != 2:
-        print("Verwendung: ./civitai_downloader.py \"https://civitai.com/...modelVersionId=XXXX\"")
-        sys.exit(1)
-
-    civitai_url = sys.argv[1].strip()
+def handle_download(civitai_url):
     model_version_id = extract_model_version_id(civitai_url)
+    if not model_version_id:
+        return
 
-    print(f"Model-Version-ID: {model_version_id} wird verarbeitet...")
+    print(f"\nModel-Version-ID: {model_version_id} wird verarbeitet...")
 
-    metadata = get_model_metadata(model_version_id)
-    download_url, base_model, model_type, filename, tags = get_download_info(metadata)
+    try:
+        metadata = get_model_metadata(model_version_id)
+        download_url, base_model, model_type, filename, tags = get_download_info(metadata)
 
-    comfy_subdir = comfyui_path_for(model_type)
-    subfolder = infer_subfolder(tags)
+        comfy_subdir = comfyui_path_for(model_type)
+        subfolder = infer_subfolder(tags)
 
-    ziel_verzeichnis = os.path.join(COMFYUI_MODEL_ROOT, comfy_subdir, base_model)
-    if subfolder:
-        ziel_verzeichnis = os.path.join(ziel_verzeichnis, subfolder)
+        ziel_verzeichnis = os.path.join(COMFYUI_MODEL_ROOT, comfy_subdir, base_model)
+        if subfolder:
+            ziel_verzeichnis = os.path.join(ziel_verzeichnis, subfolder)
 
-    ziel_pfad = os.path.join(ziel_verzeichnis, filename)
+        ziel_pfad = os.path.join(ziel_verzeichnis, filename)
 
-    print(f"Modell-Typ: {model_type}")
-    print(f"Base Model: {base_model}")
-    print(f"Tags: {tags}")
-    print(f"Speicherort: {ziel_pfad}")
+        print(f"Modell-Typ: {model_type}")
+        print(f"Base Model: {base_model}")
+        print(f"Tags: {tags}")
+        print(f"Speicherort: {ziel_pfad}")
 
-    download_file(download_url, ziel_pfad, API_KEY)
-    print("\nDownload abgeschlossen.")
+        download_file(download_url, ziel_pfad, API_KEY)
+        print("\nDownload abgeschlossen.")
+    except Exception as e:
+        print(f"Fehler beim Download: {e}")
+
+def main():
+    if len(sys.argv) == 2:
+        handle_download(sys.argv[1])
+
+    while True:
+        civitai_url = input("\nModell-URL mit modelVersionId (Enter = Beenden): ").strip()
+        if not civitai_url:
+            print("Beende.")
+            break
+        handle_download(civitai_url)
 
 if __name__ == "__main__":
     main()
